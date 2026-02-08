@@ -2,142 +2,200 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>RatOS: Stock Trader</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RatOS: PENTHOUSE DEFENSE</title>
     <style>
         body {
-            background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif;
-            display: flex; flex-direction: column; align-items: center; padding: 20px;
-        }
-        .header { width: 100%; max-width: 600px; display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .balance { font-size: 24px; color: #ffcc00; font-weight: bold; }
-
-        .market-card {
-            background: #1e1e1e; border-radius: 12px; padding: 15px; width: 100%; max-width: 600px;
-            margin-bottom: 15px; border: 1px solid #333; display: flex; align-items: center; justify-content: space-between;
-        }
-        .info { flex-grow: 1; }
-        .price { font-size: 20px; font-family: monospace; }
-        .up { color: #4caf50; } .down { color: #f44336; }
-
-        .controls button {
-            padding: 8px 15px; margin-left: 5px; border: none; border-radius: 5px;
-            cursor: pointer; font-weight: bold; transition: 0.2s;
-        }
-        .buy { background: #4caf50; color: white; }
-        .sell { background: #f44336; color: white; }
-        .buy:hover, .sell:hover { opacity: 0.8; }
-
-        #news-ticker {
-            width: 100%; max-width: 600px; background: #000; color: #00ff41;
-            padding: 10px; border-radius: 5px; margin-bottom: 20px; font-family: monospace;
-            border: 1px solid #00ff41; overflow: hidden; white-space: nowrap;
+            background: url('https://i.imgur.com/your-penthouse-bg.jpg') no-repeat center center / cover; /* Замени на свой фон пентхауса */
+            background-color: #333; /* Запасной фон */
+            color: white; font-family: 'Press Start 2P', cursive; /* Можно использовать Google Fonts для пиксельного шрифта */
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            height: 100vh; margin: 0; overflow: hidden;
+            cursor: url('https://i.imgur.com/your-cursor.png'), auto; /* Кастомный курсор, если хочешь, например, прицел */
+            user-select: none; -webkit-user-select: none;
         }
 
-        .back-btn { margin-top: 30px; color: #888; text-decoration: none; border-bottom: 1px dashed #888; }
+        @font-face {
+            font-family: 'Press Start 2P';
+            src: url('https://fonts.gstatic.com/s/pressstart2p/v15/PFBpRgpz6ZHBtTFMylokdf-Ffjs.woff2') format('woff2');
+            /* Только если хочешь пиксельный шрифт, иначе удали */
+        }
+
+        #game-area {
+            width: 90vw; max-width: 900px; height: 70vh;
+            background: rgba(0, 0, 0, 0.7); border: 4px solid #ffcc00;
+            position: relative; overflow: hidden;
+            box-shadow: 0 0 25px rgba(255, 204, 0, 0.5);
+        }
+
+        #hud {
+            width: 90vw; max-width: 900px; padding: 10px; background: #222;
+            display: flex; justify-content: space-between; align-items: center;
+            border: 4px solid #ffcc00; border-top: none; font-size: 1.2rem;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .stat-item { display: flex; align-items: center; gap: 5px; color: #ffcc00; }
+
+        #start-screen, #game-over-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 100;
+            text-align: center;
+        }
+        #start-screen button, #game-over-screen button {
+            background: #ffcc00; color: #333; border: none; padding: 15px 30px;
+            font-size: 1.5rem; cursor: pointer; border-radius: 5px; margin-top: 20px;
+        }
+        
+        .pigeon {
+            position: absolute; font-size: 40px; transform: scaleX(-1); /* Разворачиваем голубя */
+            pointer-events: auto; /* Чтобы по нему можно было кликать */
+            z-index: 5; /* Над фоном, но под HUD */
+            transition: opacity 0.2s; /* Для анимации смерти */
+        }
+        .pigeon.dying { opacity: 0; } /* Исчезает при смерти */
+
+        .back-btn { margin-top: 30px; color: #aaa; text-decoration: none; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-<div class="header">
-    <div class="balance">Твой капитал: <span id="cheese-bal">0</span> 🧀</div>
+<div id="game-area">
+    <div id="start-screen">
+        <h1>PENTHOUSE DEFENSE</h1>
+        <p>Защити свой сыр от наглых голубей!</p>
+        <button onclick="startGame()">НАЧАТЬ ЗАЩИТУ</button>
+    </div>
+
+    <div id="game-over-screen" style="display: none;">
+        <h1>КОНЕЦ ИГРЫ</h1>
+        <p id="final-score">Твой сыр был украден! Убито голубей: 0</p>
+        <button onclick="location.reload()">НАЧАТЬ ЗАНОВО</button>
+        <button onclick="location.href='https://de6ulu3m-code.github.io/ratpage/'" style="background: #555;">ВЫЙТИ ИЗ ИГРЫ</button>
+    </div>
 </div>
 
-<div id="news-ticker">ОЖИДАНИЕ НОВОСТЕЙ С ПОМОЙКИ...</div>
-
-<div id="market">
-    </div>
+<div id="hud">
+    <div class="stat-item">Сыр: <span id="cheese-val">0</span> 🧀</div>
+    <div class="stat-item">Волна: <span id="wave-val">1</span></div>
+    <div class="stat-item">Убито: <span id="kills-val">0</span></div>
+    <div class="stat-item">Здоровье базы: <span id="base-health-val">100</span> ❤️</div>
+</div>
 
 <a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">Выключить компьютер</a>
 
 <script>
     let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
-    
-    // Данные рынка
-    const stocks = [
-        { id: 'cheddar', name: 'Чеддер (Обычный)', price: 10, trend: 0, owned: 0 },
-        { id: 'parmezan', name: 'Пармезан (Элитный)', price: 50, trend: 0, owned: 0 },
-        { id: 'product', name: 'Сырный Продукт', price: 2, trend: 0, owned: 0 }
-    ];
+    let wave = 0;
+    let kills = 0;
+    let baseHealth = 100;
+    let gameRunning = false;
+    let pigeonsOnScreen = []; // Массив для отслеживания голубей
 
-    const news = [
-        { text: "Мэр города уронил головку Пармезана! Цена растет!", target: 'parmezan', impact: 1.5 },
-        { text: "Найдена бесконечная свалка Чеддера. Рынок в шоке!", target: 'cheddar', impact: 0.5 },
-        { text: "Сырный продукт признали съедобным. Взрывной рост!", target: 'product', impact: 3.0 },
-        { text: "Кот разогнал всех поставщиков. Все цены падают!", target: 'all', impact: 0.8 }
-    ];
-
-    function updateUI() {
-        document.getElementById('cheese-bal').innerText = cheese;
+    function updateHUD() {
+        document.getElementById('cheese-val').innerText = cheese;
+        document.getElementById('wave-val').innerText = wave;
+        document.getElementById('kills-val').innerText = kills;
+        document.getElementById('base-health-val').innerText = baseHealth;
         localStorage.setItem('ratCheese', cheese);
-        renderMarket();
     }
 
-    function renderMarket() {
-        const market = document.getElementById('market');
-        market.innerHTML = '';
-        stocks.forEach(s => {
-            const card = document.createElement('div');
-            card.className = 'market-card';
-            card.innerHTML = `
-                <div class="info">
-                    <strong>${s.name}</strong><br>
-                    <small>В портфеле: ${s.owned}</small>
-                </div>
-                <div class="price ${s.trend >= 0 ? 'up' : 'down'}">
-                    ${s.price.toFixed(2)} 🧀 ${s.trend >= 0 ? '▲' : '▼'}
-                </div>
-                <div class="controls">
-                    <button class="buy" onclick="buy('${s.id}')">КУПИТЬ</button>
-                    <button class="sell" onclick="sell('${s.id}')">ПРОДАТЬ</button>
-                </div>
-            `;
-            market.appendChild(card);
-        });
-    }
+    function spawnPigeon() {
+        if (!gameRunning) return;
 
-    function buy(id) {
-        const s = stocks.find(x => x.id === id);
-        if (cheese >= s.price) {
-            cheese -= s.price;
-            s.owned++;
-            updateUI();
-        }
-    }
+        const gameArea = document.getElementById('game-area');
+        const pigeon = document.createElement('div');
+        pigeon.className = 'pigeon';
+        pigeon.innerText = '🐦'; // Иконка голубя
+        pigeon.style.left = -50 + 'px'; // Начинаем за левой границей
+        pigeon.style.top = Math.random() * (gameArea.offsetHeight - 50) + 'px';
+        gameArea.appendChild(pigeon);
+        pigeonsOnScreen.push(pigeon);
 
-    function sell(id) {
-        const s = stocks.find(x => x.id === id);
-        if (s.owned > 0) {
-            cheese += s.price;
-            s.owned--;
-            updateUI();
-        }
-    }
-
-    // Симуляция цен
-    setInterval(() => {
-        stocks.forEach(s => {
-            let change = (Math.random() - 0.5) * (s.price * 0.1);
-            s.trend = change;
-            s.price = Math.max(0.5, s.price + change);
-        });
-        updateUI();
-    }, 2000);
-
-    // Случайные новости
-    setInterval(() => {
-        const n = news[Math.floor(Math.random() * news.news.length)]; // Исправлено: news[idx]
-        if (Math.random() > 0.7) {
-            document.getElementById('news-ticker').innerText = n.text;
-            if (n.target === 'all') {
-                stocks.forEach(s => s.price *= n.impact);
-            } else {
-                const s = stocks.find(x => x.id === n.target);
-                s.price *= n.impact;
+        let speed = 1 + (wave * 0.2); // Голуби становятся быстрее с каждой волной
+        let currentPos = -50;
+        const moveInterval = setInterval(() => {
+            if (!gameRunning) {
+                clearInterval(moveInterval);
+                return;
             }
-        }
-    }, 8000);
 
-    updateUI();
+            currentPos += speed;
+            pigeon.style.left = currentPos + 'px';
+
+            if (currentPos > gameArea.offsetWidth - 50) { // Голубь дошел до конца
+                clearInterval(moveInterval);
+                pigeon.remove();
+                baseHealth -= 10; // Теряем здоровье базы
+                if (baseHealth <= 0) {
+                    gameOver();
+                }
+                updateHUD();
+                pigeonsOnScreen = pigeonsOnScreen.filter(p => p !== pigeon); // Удаляем из массива
+            }
+        }, 30);
+
+        pigeon.onclick = () => {
+            if (!gameRunning) return;
+            clearInterval(moveInterval);
+            pigeon.classList.add('dying'); // Анимация исчезновения
+            setTimeout(() => pigeon.remove(), 200); // Удаляем после анимации
+            
+            kills++;
+            cheese += 5 + (wave * 1); // Зарабатываем сыр
+            updateHUD();
+            pigeonsOnScreen = pigeonsOnScreen.filter(p => p !== pigeon);
+        };
+    }
+
+    function startWave() {
+        if (!gameRunning) return;
+        wave++;
+        updateHUD();
+
+        let pigeonsToSpawn = 5 + (wave * 2); // Больше голубей с каждой волной
+        let spawnCount = 0;
+        const spawnInterval = setInterval(() => {
+            if (spawnCount < pigeonsToSpawn) {
+                spawnPigeon();
+                spawnCount++;
+            } else {
+                clearInterval(spawnInterval);
+                // Ждем, пока все голуби текущей волны не будут убиты/пройдут
+                setTimeout(() => {
+                    if (pigeonsOnScreen.length === 0 && gameRunning) {
+                        startWave(); // Начинаем следующую волну
+                    }
+                }, 5000); // Проверяем каждые 5 секунд, не закончилась ли волна
+            }
+        }, 1000 - (wave * 50)); // Голуби появляются быстрее
+    }
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        gameRunning = true;
+        baseHealth = 100;
+        wave = 0;
+        kills = 0;
+        
+        // Очищаем старых голубей, если были
+        pigeonsOnScreen.forEach(p => p.remove());
+        pigeonsOnScreen = [];
+
+        updateHUD();
+        startWave();
+    }
+
+    function gameOver() {
+        gameRunning = false;
+        document.getElementById('final-score').innerText = `Твой сыр был украден! Убито голубей: ${kills}`;
+        document.getElementById('game-over-screen').style.display = 'flex';
+        // Убиваем всех оставшихся голубей
+        pigeonsOnScreen.forEach(p => p.remove());
+        pigeonsOnScreen = [];
+    }
+
+    updateHUD(); // Обновляем HUD при загрузке
 </script>
 </body>
 </html>
