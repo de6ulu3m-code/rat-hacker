@@ -2,133 +2,142 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RatOS: Ultra-Breach</title>
+    <title>RatOS: Stock Trader</title>
     <style>
         body {
-            background: #000; color: #00ff41; font-family: 'Courier New', monospace;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0; overflow: hidden;
+            background: #121212; color: #e0e0e0; font-family: 'Segoe UI', sans-serif;
+            display: flex; flex-direction: column; align-items: center; padding: 20px;
         }
-        #matrix-bg { position: fixed; top: 0; left: 0; z-index: -1; opacity: 0.1; font-size: 10px; }
-        
-        .header { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-between; font-size: 1.2rem; border-bottom: 1px solid #00ff41; padding-bottom: 5px; }
-        .cheese-stat { color: #ffcc00; }
+        .header { width: 100%; max-width: 600px; display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .balance { font-size: 24px; color: #ffcc00; font-weight: bold; }
 
-        /* ИГРОВОЕ ПОЛЕ */
-        #game-board {
-            display: grid; grid-template-columns: repeat(4, 70px); grid-template-rows: repeat(4, 70px);
-            gap: 15px; background: rgba(0, 50, 0, 0.3); padding: 20px; border: 2px solid #00ff41;
-            box-shadow: 0 0 20px #00ff41; border-radius: 10px;
+        .market-card {
+            background: #1e1e1e; border-radius: 12px; padding: 15px; width: 100%; max-width: 600px;
+            margin-bottom: 15px; border: 1px solid #333; display: flex; align-items: center; justify-content: space-between;
         }
-        .node {
-            width: 70px; height: 70px; border: 1px solid #00ff41; display: flex;
-            align-items: center; justify-content: center; font-size: 1.5rem;
-            cursor: pointer; transition: 0.2s; user-select: none;
+        .info { flex-grow: 1; }
+        .price { font-size: 20px; font-family: monospace; }
+        .up { color: #4caf50; } .down { color: #f44336; }
+
+        .controls button {
+            padding: 8px 15px; margin-left: 5px; border: none; border-radius: 5px;
+            cursor: pointer; font-weight: bold; transition: 0.2s;
         }
-        .node:hover { background: rgba(0, 255, 65, 0.2); box-shadow: 0 0 10px #00ff41; }
-        .node.target { color: #000; background: #00ff41; font-weight: bold; }
-        .node.error { background: #ff4444; border-color: red; }
+        .buy { background: #4caf50; color: white; }
+        .sell { background: #f44336; color: white; }
+        .buy:hover, .sell:hover { opacity: 0.8; }
 
-        /* ТАЙМЕР */
-        #timer-bar { width: 320px; height: 10px; background: #111; border: 1px solid #00ff41; margin-top: 20px; position: relative; }
-        #timer-fill { width: 100%; height: 100%; background: #00ff41; transition: width 0.1s linear; }
+        #news-ticker {
+            width: 100%; max-width: 600px; background: #000; color: #00ff41;
+            padding: 10px; border-radius: 5px; margin-bottom: 20px; font-family: monospace;
+            border: 1px solid #00ff41; overflow: hidden; white-space: nowrap;
+        }
 
-        .log { margin-top: 20px; height: 60px; text-align: center; font-size: 0.9rem; color: #888; }
-        .back-btn { position: absolute; bottom: 20px; color: #00ff41; text-decoration: none; border: 1px solid #00ff41; padding: 5px 20px; }
+        .back-btn { margin-top: 30px; color: #888; text-decoration: none; border-bottom: 1px dashed #888; }
     </style>
 </head>
 <body>
 
-<div id="matrix-bg"></div>
-
 <div class="header">
-    <div>SYSTEM: BREACH_V2.0</div>
-    <div class="cheese-stat">DATA_VAL: <span id="cheese-val">0</span> 🧀</div>
+    <div class="balance">Твой капитал: <span id="cheese-bal">0</span> 🧀</div>
 </div>
 
-<div id="target-code" style="font-size: 1.5rem; margin-bottom: 15px; letter-spacing: 5px;">ЦЕЛЬ: <span id="key">--</span></div>
+<div id="news-ticker">ОЖИДАНИЕ НОВОСТЕЙ С ПОМОЙКИ...</div>
 
-<div id="game-board"></div>
+<div id="market">
+    </div>
 
-<div id="timer-bar"><div id="timer-fill"></div></div>
-
-<div class="log" id="console-log">Инициализация взлома...</div>
-
-<a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">DISCONNECT</a>
+<a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">Выключить компьютер</a>
 
 <script>
     let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
-    let currentKey = "";
-    let timeLeft = 100;
-    let level = 1;
-    let symbols = ["0", "1", "X", "Y", "A", "B", "!", "?", "#", "Ω"];
+    
+    // Данные рынка
+    const stocks = [
+        { id: 'cheddar', name: 'Чеддер (Обычный)', price: 10, trend: 0, owned: 0 },
+        { id: 'parmezan', name: 'Пармезан (Элитный)', price: 50, trend: 0, owned: 0 },
+        { id: 'product', name: 'Сырный Продукт', price: 2, trend: 0, owned: 0 }
+    ];
 
-    function updateStats() {
-        document.getElementById('cheese-val').innerText = cheese;
+    const news = [
+        { text: "Мэр города уронил головку Пармезана! Цена растет!", target: 'parmezan', impact: 1.5 },
+        { text: "Найдена бесконечная свалка Чеддера. Рынок в шоке!", target: 'cheddar', impact: 0.5 },
+        { text: "Сырный продукт признали съедобным. Взрывной рост!", target: 'product', impact: 3.0 },
+        { text: "Кот разогнал всех поставщиков. Все цены падают!", target: 'all', impact: 0.8 }
+    ];
+
+    function updateUI() {
+        document.getElementById('cheese-bal').innerText = cheese;
         localStorage.setItem('ratCheese', cheese);
+        renderMarket();
     }
 
-    function createBoard() {
-        const board = document.getElementById('game-board');
-        board.innerHTML = "";
-        let allSymbols = [];
-        
-        // Заполняем случайными символами
-        for (let i = 0; i < 16; i++) {
-            let s = symbols[Math.floor(Math.random() * symbols.length)];
-            allSymbols.push(s);
-            const node = document.createElement('div');
-            node.className = 'node';
-            node.innerText = s;
-            node.onclick = () => checkNode(s, node);
-            board.appendChild(node);
+    function renderMarket() {
+        const market = document.getElementById('market');
+        market.innerHTML = '';
+        stocks.forEach(s => {
+            const card = document.createElement('div');
+            card.className = 'market-card';
+            card.innerHTML = `
+                <div class="info">
+                    <strong>${s.name}</strong><br>
+                    <small>В портфеле: ${s.owned}</small>
+                </div>
+                <div class="price ${s.trend >= 0 ? 'up' : 'down'}">
+                    ${s.price.toFixed(2)} 🧀 ${s.trend >= 0 ? '▲' : '▼'}
+                </div>
+                <div class="controls">
+                    <button class="buy" onclick="buy('${s.id}')">КУПИТЬ</button>
+                    <button class="sell" onclick="sell('${s.id}')">ПРОДАТЬ</button>
+                </div>
+            `;
+            market.appendChild(card);
+        });
+    }
+
+    function buy(id) {
+        const s = stocks.find(x => x.id === id);
+        if (cheese >= s.price) {
+            cheese -= s.price;
+            s.owned++;
+            updateUI();
         }
-        
-        // Выбираем один из символов как цель
-        currentKey = allSymbols[Math.floor(Math.random() * allSymbols.length)];
-        document.getElementById('key').innerText = currentKey;
     }
 
-    function checkNode(symbol, element) {
-        if (symbol === currentKey) {
-            cheese += Math.floor(level * 1.5);
-            level++;
-            timeLeft = Math.min(100, timeLeft + 20); // Добавляем время за успех
-            document.getElementById('console-log').innerText = "ДОСТУП РАЗРЕШЕН. ПЕРЕХОД К СЛЕДУЮЩЕМУ УЗЛУ...";
-            element.classList.add('target');
-            setTimeout(createBoard, 200);
-        } else {
-            timeLeft -= 15; // Штраф за ошибку
-            document.getElementById('console-log').innerText = "ОШИБКА! СИСТЕМА ОБНАРУЖИЛА ВТОРЖЕНИЕ!";
-            element.classList.add('error');
-            setTimeout(() => element.classList.remove('error'), 300);
+    function sell(id) {
+        const s = stocks.find(x => x.id === id);
+        if (s.owned > 0) {
+            cheese += s.price;
+            s.owned--;
+            updateUI();
         }
-        updateStats();
     }
 
-    // Таймер игры
+    // Симуляция цен
     setInterval(() => {
-        timeLeft -= (0.5 + (level * 0.05)); // Чем выше уровень, тем быстрее капает время
-        document.getElementById('timer-fill').style.width = timeLeft + "%";
-        
-        if (timeLeft <= 0) {
-            alert("СОЕДИНЕНИЕ РАЗОРВАНО. Вы успели добыть " + (level * 2) + " сырков.");
-            location.reload();
+        stocks.forEach(s => {
+            let change = (Math.random() - 0.5) * (s.price * 0.1);
+            s.trend = change;
+            s.price = Math.max(0.5, s.price + change);
+        });
+        updateUI();
+    }, 2000);
+
+    // Случайные новости
+    setInterval(() => {
+        const n = news[Math.floor(Math.random() * news.news.length)]; // Исправлено: news[idx]
+        if (Math.random() > 0.7) {
+            document.getElementById('news-ticker').innerText = n.text;
+            if (n.target === 'all') {
+                stocks.forEach(s => s.price *= n.impact);
+            } else {
+                const s = stocks.find(x => x.id === n.target);
+                s.price *= n.impact;
+            }
         }
-    }, 100);
+    }, 8000);
 
-    // Матричный фон для атмосферы
-    function drawMatrix() {
-        let bg = document.getElementById('matrix-bg');
-        let txt = "";
-        for(let i=0; i<1000; i++) txt += symbols[Math.floor(Math.random()*symbols.length)];
-        bg.innerText = txt;
-    }
-    setInterval(drawMatrix, 100);
-
-    createBoard();
-    updateStats();
+    updateUI();
 </script>
 </body>
 </html>
