@@ -3,20 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RatOS: SURVIVOR</title>
+    <title>RatOS: Heavy Metal Survivor</title>
     <style>
-        body { margin: 0; background: #050505; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; }
+        body { margin: 0; background: #0a0a0a; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; user-select: none; }
         canvas { display: block; }
-        .ui { position: absolute; top: 10px; left: 10px; pointer-events: none; text-shadow: 2px 2px #000; }
+        .ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; font-weight: bold; font-size: 1.1rem; z-index: 10; }
+        
+        /* Экран выбора способностей */
         #upgrade-screen { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.8); flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+            background: rgba(0,0,0,0.85); flex-direction: column; align-items: center; justify-content: center; z-index: 100;
         }
         .option { 
-            background: #222; border: 2px solid #0f0; padding: 20px; margin: 10px; 
-            cursor: pointer; width: 250px; text-align: center; color: #0f0;
+            background: #111; border: 2px solid #0f0; padding: 20px; margin: 10px; 
+            cursor: pointer; width: 280px; text-align: center; color: #0f0; border-radius: 10px;
         }
         .option:hover { background: #0f0; color: #000; }
+
+        /* Стили джойстика */
+        #joystick-container {
+            position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 20; touch-action: none;
+        }
+        #joystick-knob {
+            position: absolute; top: 35px; left: 35px; width: 50px; height: 50px;
+            background: #0f0; border-radius: 50%; box-shadow: 0 0 15px #0f0;
+        }
     </style>
 </head>
 <body>
@@ -24,14 +36,18 @@
 <canvas id="game"></canvas>
 
 <div class="ui">
-    HP: <span id="hp">100</span> | LVL: <span id="lvl">1</span> | СЫР: <span id="cheese">0</span> 🧀
+    <div>❤️ HP: <span id="hp">100</span></div>
+    <div>⭐ LVL: <span id="lvl">1</span></div>
+    <div>🧀 СЫР: <span id="cheese">0</span></div>
 </div>
 
+<div id="joystick-container"><div id="joystick-knob"></div></div>
+
 <div id="upgrade-screen">
-    <h2>ВЫБЕРИ МОДИФИКАЦИЮ</h2>
-    <div class="option" onclick="applyUpgrade('speed')">СКОРОСТЬ ПЕРЕДВИЖЕНИЯ++</div>
-    <div class="option" onclick="applyUpgrade('fireRate')">СКОРОСТЬ СТРЕЛЬБЫ++</div>
-    <div class="option" onclick="applyUpgrade('damage')">УРОН ЛАЗЕРА++</div>
+    <h2 style="color: #ffcc00;">ВЗЛОМ УРОВНЯ: ВЫБЕРИ МОД</h2>
+    <div class="option" onclick="applyUpgrade('speed')">⚡ ТУРБО-ЛАПЫ (+Скорость)</div>
+    <div class="option" onclick="applyUpgrade('fireRate')">🔥 МИНИГАН (Скорострельность++)</div>
+    <div class="option" onclick="applyUpgrade('damage')">☢️ УРАНОВЫЕ ПУЛИ (Урон++)</div>
 </div>
 
 <script>
@@ -39,13 +55,16 @@
     const ctx = canvas.getContext('2d');
     let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
 
-    let player = { x: 0, y: 0, hp: 100, speed: 4, lvl: 1, exp: 0, nextLvl: 50 };
-    let keys = {};
+    let player = { x: 0, y: 0, hp: 100, maxHp: 100, speed: 3.5, lvl: 1, exp: 0, nextLvl: 100 };
     let enemies = [];
     let bullets = [];
-    let particles = [];
     let gameActive = true;
-    let stats = { fireRate: 500, damage: 1, lastShot: 0 };
+    let stats = { fireRate: 400, damage: 1, lastShot: 0, range: 400 };
+
+    // Джойстик
+    let joyX = 0, joyY = 0, isDragging = false;
+    const joyContainer = document.getElementById('joystick-container');
+    const joyKnob = document.getElementById('joystick-knob');
 
     function init() {
         canvas.width = window.innerWidth;
@@ -54,70 +73,100 @@
         player.y = canvas.height / 2;
     }
 
-    window.addEventListener('keydown', e => keys[e.code] = true);
-    window.addEventListener('keyup', e => keys[e.code] = false);
-    window.addEventListener('mousedown', shoot);
+    // Логика джойстика
+    const handleMove = (e) => {
+        if (!isDragging) return;
+        const rect = joyContainer.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
 
-    function shoot() {
-        if (Date.now() - stats.lastShot < stats.fireRate) return;
-        const angle = Math.atan2(mouseY - player.y, mouseX - player.x);
-        bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 10, vy: Math.sin(angle) * 10 });
-        stats.lastShot = Date.now();
+        const dx = clientX - centerX;
+        const dy = clientY - centerY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const maxDist = 60;
+
+        joyX = dx / dist || 0;
+        joyY = dy / dist || 0;
+
+        const moveDist = Math.min(dist, maxDist);
+        joyKnob.style.transform = `translate(${joyX * moveDist}px, ${joyY * moveDist}px)`;
+    };
+
+    joyContainer.addEventListener('mousedown', () => isDragging = true);
+    joyContainer.addEventListener('touchstart', () => isDragging = true);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('mouseup', () => { isDragging = false; joyX = 0; joyY = 0; joyKnob.style.transform = 'translate(0,0)'; });
+    window.addEventListener('touchend', () => { isDragging = false; joyX = 0; joyY = 0; joyKnob.style.transform = 'translate(0,0)'; });
+
+    function autoShoot() {
+        if (!gameActive) return;
+        let now = Date.now();
+        if (now - stats.lastShot < stats.fireRate) return;
+
+        // Ищем ближайшего врага
+        let target = null;
+        let minDist = stats.range;
+        enemies.forEach(en => {
+            let d = Math.hypot(en.x - player.x, en.y - player.y);
+            if (d < minDist) { minDist = d; target = en; }
+        });
+
+        if (target) {
+            const angle = Math.atan2(target.y - player.y, target.x - player.x);
+            bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12 });
+            stats.lastShot = now;
+        }
     }
-
-    let mouseX = 0, mouseY = 0;
-    window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 
     function spawnEnemy() {
         if (!gameActive) return;
-        const side = Math.floor(Math.random() * 4);
-        let x, y;
-        if (side === 0) { x = Math.random() * canvas.width; y = -30; }
-        else if (side === 1) { x = canvas.width + 30; y = Math.random() * canvas.height; }
-        else if (side === 2) { x = Math.random() * canvas.width; y = canvas.height + 30; }
-        else { x = -30; y = Math.random() * canvas.height; }
-        enemies.push({ x, y, hp: 2, speed: 1 + (player.lvl * 0.2) });
+        const angle = Math.random() * Math.PI * 2;
+        const dist = canvas.width; 
+        enemies.push({ 
+            x: player.x + Math.cos(angle) * dist, 
+            y: player.y + Math.sin(angle) * dist, 
+            hp: 2 + (player.lvl * 0.5), 
+            speed: 1.5 + (player.lvl * 0.1) 
+        });
     }
 
-    setInterval(spawnEnemy, 800);
+    setInterval(spawnEnemy, 1000);
 
     function update() {
         if (!gameActive) return;
 
-        // Движение
-        if (keys['KeyW']) player.y -= player.speed;
-        if (keys['KeyS']) player.y += player.speed;
-        if (keys['KeyA']) player.x -= player.speed;
-        if (keys['KeyD']) player.x += player.speed;
+        player.x += joyX * player.speed;
+        player.y += joyY * player.speed;
 
-        // Пули
+        autoShoot();
+
         bullets.forEach((b, bi) => {
             b.x += b.vx; b.y += b.vy;
             if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(bi, 1);
         });
 
-        // Враги
         enemies.forEach((en, ei) => {
             const angle = Math.atan2(player.y - en.y, player.x - en.x);
             en.x += Math.cos(angle) * en.speed;
             en.y += Math.sin(angle) * en.speed;
 
-            // Коллизия с пулями
             bullets.forEach((b, bi) => {
-                if (Math.hypot(en.x - b.x, en.y - b.y) < 20) {
+                if (Math.hypot(en.x - b.x, en.y - b.y) < 25) {
                     en.hp -= stats.damage;
                     bullets.splice(bi, 1);
                     if (en.hp <= 0) {
                         enemies.splice(ei, 1);
-                        player.exp += 10;
+                        player.exp += 20;
                         if (player.exp >= player.nextLvl) levelUp();
                     }
                 }
             });
 
-            // Урон игроку
-            if (Math.hypot(en.x - player.x, en.y - player.y) < 30) {
-                player.hp -= 0.5;
+            if (Math.hypot(en.x - player.x, en.y - player.y) < 35) {
+                player.hp -= 0.3;
                 if (player.hp <= 0) gameOver();
             }
         });
@@ -128,42 +177,53 @@
     }
 
     function draw() {
-        ctx.fillStyle = '#050505';
+        ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Игрок
-        ctx.font = "40px Arial";
-        ctx.fillText("🐀", player.x - 20, player.y + 15);
+        ctx.font = "45px Arial";
+        ctx.fillText("🐀", player.x - 22, player.y + 18);
         
-        // Враги (Голуби-мутанты)
-        ctx.font = "30px Arial";
-        enemies.forEach(en => ctx.fillText("🐦", en.x - 15, en.y + 10));
+        // ХП-бар игрока
+        ctx.fillStyle = '#333';
+        ctx.fillRect(player.x - 30, player.y - 45, 60, 8);
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(player.x - 30, player.y - 45, (player.hp/player.maxHp)*60, 8);
+
+        // Враги
+        ctx.font = "35px Arial";
+        enemies.forEach(en => ctx.fillText("🐦", en.x - 17, en.y + 12));
 
         // Пули
-        ctx.fillStyle = "#0f0";
-        bullets.forEach(b => ctx.fillRect(b.x, b.y, 5, 5));
+        ctx.fillStyle = "#ffff00";
+        bullets.forEach(b => {
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
+            ctx.fill();
+        });
     }
 
     function levelUp() {
         gameActive = false;
         player.lvl++;
         player.exp = 0;
-        player.nextLvl += 50;
-        cheese += 10;
+        player.nextLvl += 100;
+        cheese += 50;
         localStorage.setItem('ratCheese', cheese);
         document.getElementById('upgrade-screen').style.display = 'flex';
     }
 
     function applyUpgrade(type) {
-        if (type === 'speed') player.speed += 1;
-        if (type === 'fireRate') stats.fireRate *= 0.7;
+        if (type === 'speed') player.speed += 0.8;
+        if (type === 'fireRate') stats.fireRate *= 0.75;
         if (type === 'damage') stats.damage += 1;
+        player.hp = player.maxHp; 
         document.getElementById('upgrade-screen').style.display = 'none';
         gameActive = true;
     }
 
     function gameOver() {
-        alert("ТВОЙ СКЛАД ВЗЛОМАН! ИТОГОВЫЙ LVL: " + player.lvl);
+        alert("ОБОРОНА ПРОРВАНА! ТВОЙ УРОВЕНЬ: " + player.lvl);
         location.reload();
     }
 
@@ -173,6 +233,7 @@
         requestAnimationFrame(loop);
     }
 
+    window.addEventListener('resize', init);
     init();
     loop();
 </script>
