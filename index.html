@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RatOS: Heavy Metal Survivor</title>
+    <title>RatOS: MUTANT SURVIVAL</title>
     <style>
         body { margin: 0; background: #0a0a0a; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; user-select: none; }
         canvas { display: block; }
         .ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; font-weight: bold; font-size: 1.1rem; z-index: 10; }
         
-        /* Экран выбора способностей */
         #upgrade-screen { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.85); flex-direction: column; align-items: center; justify-content: center; z-index: 100;
@@ -20,7 +19,7 @@
         }
         .option:hover { background: #0f0; color: #000; }
 
-        /* Стили джойстика */
+        /* Джойстик */
         #joystick-container {
             position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
             background: rgba(255,255,255,0.1); border-radius: 50%; z-index: 20; touch-action: none;
@@ -28,6 +27,16 @@
         #joystick-knob {
             position: absolute; top: 35px; left: 35px; width: 50px; height: 50px;
             background: #0f0; border-radius: 50%; box-shadow: 0 0 15px #0f0;
+        }
+
+        /* Health bar for player */
+        .player-hp-bar {
+            position: absolute;
+            width: 60px; height: 8px; background: #333; border: 1px solid #0f0;
+            transform: translate(-50%, -50%); /* Center the bar */
+        }
+        .player-hp-fill {
+            width: 100%; height: 100%; background: #f00; /* Red for player HP */
         }
     </style>
 </head>
@@ -48,6 +57,8 @@
     <div class="option" onclick="applyUpgrade('speed')">⚡ ТУРБО-ЛАПЫ (+Скорость)</div>
     <div class="option" onclick="applyUpgrade('fireRate')">🔥 МИНИГАН (Скорострельность++)</div>
     <div class="option" onclick="applyUpgrade('damage')">☢️ УРАНОВЫЕ ПУЛИ (Урон++)</div>
+    <div class="option" onclick="applyUpgrade('health')">💖 БРОНЯ (Макс. HP++)</div>
+    <div class="option" onclick="applyUpgrade('range')">📡 ДАЛЬНОБОЙНЫЙ СЕНСОР (Радиус стрельбы++)</div>
 </div>
 
 <script>
@@ -71,6 +82,16 @@
         canvas.height = window.innerHeight;
         player.x = canvas.width / 2;
         player.y = canvas.height / 2;
+        enemies = []; // Очищаем врагов при рестарте/инициализации
+        bullets = [];
+        player.hp = player.maxHp;
+        player.lvl = 1;
+        player.exp = 0;
+        player.nextLvl = 100;
+        stats.fireRate = 400; // Сброс статов при инициализации
+        stats.damage = 1;
+        stats.range = 400;
+        player.speed = 3.5;
     }
 
     // Логика джойстика
@@ -85,7 +106,7 @@
         const dx = clientX - centerX;
         const dy = clientY - centerY;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        const maxDist = 60;
+        const maxDist = 40; // Максимальное отклонение джойстика
 
         joyX = dx / dist || 0;
         joyY = dy / dist || 0;
@@ -94,8 +115,8 @@
         joyKnob.style.transform = `translate(${joyX * moveDist}px, ${joyY * moveDist}px)`;
     };
 
-    joyContainer.addEventListener('mousedown', () => isDragging = true);
-    joyContainer.addEventListener('touchstart', () => isDragging = true);
+    joyContainer.addEventListener('mousedown', (e) => { isDragging = true; handleMove(e); });
+    joyContainer.addEventListener('touchstart', (e) => { isDragging = true; handleMove(e); });
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('touchmove', handleMove);
     window.addEventListener('mouseup', () => { isDragging = false; joyX = 0; joyY = 0; joyKnob.style.transform = 'translate(0,0)'; });
@@ -106,7 +127,6 @@
         let now = Date.now();
         if (now - stats.lastShot < stats.fireRate) return;
 
-        // Ищем ближайшего врага
         let target = null;
         let minDist = stats.range;
         enemies.forEach(en => {
@@ -116,36 +136,63 @@
 
         if (target) {
             const angle = Math.atan2(target.y - player.y, target.x - player.x);
-            bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12 });
+            bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 15, vy: Math.sin(angle) * 15 });
             stats.lastShot = now;
         }
     }
 
+    const enemyTypes = {
+        pigeon: { char: "🐦", hp: 10, speed: 2, xp: 10, size: 30, color: "#aaa", damage: 0.3 },
+        catrat: { char: "😼", hp: 50, speed: 1, xp: 50, size: 50, color: "#f00", damage: 0.8 },
+        vacuum: { char: "🤖", hp: 30, speed: 3, xp: 30, size: 40, color: "#00f", damage: 1.5 }
+    };
+
     function spawnEnemy() {
         if (!gameActive) return;
+
+        let type = "pigeon";
+        if (Math.random() < 0.1 * player.lvl) type = "catrat"; // Шанс на кота
+        if (Math.random() < 0.03 * player.lvl) type = "vacuum"; // Шанс на пылесос
+
+        const enemyDef = enemyTypes[type];
         const angle = Math.random() * Math.PI * 2;
         const dist = canvas.width; 
+        
         enemies.push({ 
             x: player.x + Math.cos(angle) * dist, 
             y: player.y + Math.sin(angle) * dist, 
-            hp: 2 + (player.lvl * 0.5), 
-            speed: 1.5 + (player.lvl * 0.1) 
+            hp: enemyDef.hp, 
+            maxHp: enemyDef.hp,
+            speed: enemyDef.speed + (player.lvl * 0.05), // Враги становятся быстрее
+            type: type,
+            char: enemyDef.char,
+            size: enemyDef.size,
+            color: enemyDef.color,
+            damage: enemyDef.damage
         });
     }
 
-    setInterval(spawnEnemy, 1000);
+    setInterval(spawnEnemy, 700 - (player.lvl * 5)); // Враги спавнятся быстрее
 
     function update() {
         if (!gameActive) return;
 
+        // Движение игрока
         player.x += joyX * player.speed;
         player.y += joyY * player.speed;
+
+        // Ограничение игрока в пределах экрана
+        player.x = Math.max(0, Math.min(canvas.width, player.x));
+        player.y = Math.max(0, Math.min(canvas.height, player.y));
+
 
         autoShoot();
 
         bullets.forEach((b, bi) => {
             b.x += b.vx; b.y += b.vy;
-            if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(bi, 1);
+            if (b.x < -50 || b.x > canvas.width + 50 || b.y < -50 || b.y > canvas.height + 50) {
+                bullets.splice(bi, 1);
+            }
         });
 
         enemies.forEach((en, ei) => {
@@ -154,19 +201,20 @@
             en.y += Math.sin(angle) * en.speed;
 
             bullets.forEach((b, bi) => {
-                if (Math.hypot(en.x - b.x, en.y - b.y) < 25) {
+                if (Math.hypot(en.x - b.x, en.y - b.y) < en.size / 2 + 5) { // Учитываем размер врага
                     en.hp -= stats.damage;
                     bullets.splice(bi, 1);
                     if (en.hp <= 0) {
                         enemies.splice(ei, 1);
-                        player.exp += 20;
+                        player.exp += enemyTypes[en.type].xp;
                         if (player.exp >= player.nextLvl) levelUp();
                     }
                 }
             });
 
-            if (Math.hypot(en.x - player.x, en.y - player.y) < 35) {
-                player.hp -= 0.3;
+            // Урон игроку при контакте
+            if (Math.hypot(en.x - player.x, en.y - player.y) < en.size / 2 + 15) { // Размер игрока ~30
+                player.hp -= en.damage;
                 if (player.hp <= 0) gameOver();
             }
         });
@@ -177,7 +225,7 @@
     }
 
     function draw() {
-        ctx.fillStyle = '#0a0a0a';
+        ctx.fillStyle = '#111'; // Более темный фон
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // Игрок
@@ -187,12 +235,28 @@
         // ХП-бар игрока
         ctx.fillStyle = '#333';
         ctx.fillRect(player.x - 30, player.y - 45, 60, 8);
-        ctx.fillStyle = '#0f0';
+        ctx.fillStyle = player.hp > player.maxHp / 2 ? '#0f0' : player.hp > player.maxHp / 4 ? '#ffcc00' : '#f00';
         ctx.fillRect(player.x - 30, player.y - 45, (player.hp/player.maxHp)*60, 8);
 
+
         // Враги
-        ctx.font = "35px Arial";
-        enemies.forEach(en => ctx.fillText("🐦", en.x - 17, en.y + 12));
+        enemies.forEach(en => {
+            // Визуализация урона (меняем цвет)
+            const damageFactor = en.hp / en.maxHp;
+            let enemyColor = en.color;
+            if (damageFactor < 0.5) enemyColor = "#ff0"; // Желтый при среднем уроне
+            if (damageFactor < 0.2) enemyColor = "#f00"; // Красный при низком ХП
+
+            ctx.fillStyle = enemyColor;
+            ctx.font = en.size + "px Arial";
+            ctx.fillText(en.char, en.x - en.size / 2, en.y + en.size / 2 - 5);
+
+            // ХП-бар врага
+            ctx.fillStyle = '#333';
+            ctx.fillRect(en.x - en.size / 2, en.y - en.size / 2 - 10, en.size, 5);
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(en.x - en.size / 2, en.y - en.size / 2 - 10, (en.hp/en.maxHp)*en.size, 5);
+        });
 
         // Пули
         ctx.fillStyle = "#ffff00";
@@ -207,24 +271,29 @@
         gameActive = false;
         player.lvl++;
         player.exp = 0;
-        player.nextLvl += 100;
-        cheese += 50;
+        player.nextLvl += 50; // Увеличиваем порог для следующего уровня
+        cheese += 50; // Награда за уровень
         localStorage.setItem('ratCheese', cheese);
+        player.hp = player.maxHp; // Восстанавливаем HP при уровне
         document.getElementById('upgrade-screen').style.display = 'flex';
     }
 
     function applyUpgrade(type) {
-        if (type === 'speed') player.speed += 0.8;
+        if (type === 'speed') player.speed += 1;
         if (type === 'fireRate') stats.fireRate *= 0.75;
         if (type === 'damage') stats.damage += 1;
+        if (type === 'health') player.maxHp += 25;
+        if (type === 'range') stats.range += 100;
+
         player.hp = player.maxHp; 
         document.getElementById('upgrade-screen').style.display = 'none';
         gameActive = true;
     }
 
     function gameOver() {
-        alert("ОБОРОНА ПРОРВАНА! ТВОЙ УРОВЕНЬ: " + player.lvl);
-        location.reload();
+        gameActive = false;
+        alert("ОБОРОНА ПРОРВАНА! ТВОЙ УРОВЕНЬ: " + player.lvl + ". СОБРАНО СЫРА: " + cheese + "🧀");
+        location.reload(); // Перезагружаем страницу для новой игры
     }
 
     function loop() {
