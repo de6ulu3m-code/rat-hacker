@@ -2,108 +2,160 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>RatOS v1.0 - Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RatOS: SYPHON-HACKER</title>
     <style>
         body {
-            background-color: #0c0c0c;
-            color: #00ff00;
-            font-family: 'Courier New', monospace;
-            display: flex; flex-direction: column; align-items: center;
-            justify-content: center; height: 100vh; margin: 0;
-            overflow: hidden;
+            background: #050505; color: #00ff41; font-family: 'Courier New', monospace;
+            display: flex; flex-direction: column; align-items: center; margin: 0; overflow: hidden;
         }
-        #terminal {
-            width: 80%; max-width: 600px; height: 400px;
-            border: 2px solid #00ff00; padding: 20px;
-            background: #000; box-shadow: 0 0 20px rgba(0,255,0,0.2);
-            overflow-y: auto; position: relative;
+        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        /* СТАТИСТИКА */
+        .hud { position: absolute; top: 20px; left: 20px; font-size: 1.2rem; text-shadow: 0 0 10px #00ff41; }
+        .cheese-count { color: #ffcc00; font-size: 2rem; }
+
+        /* ЦЕНТРАЛЬНЫЙ ОБЪЕКТ */
+        #server-core {
+            width: 200px; height: 200px; background: #ffcc00; border-radius: 20%;
+            display: flex; align-items: center; justify-content: center; font-size: 80px;
+            cursor: pointer; box-shadow: 0 0 50px #ffcc00; transition: transform 0.1s;
+            position: relative; z-index: 10;
         }
-        .input-line { display: flex; gap: 10px; margin-top: 10px; }
-        input {
-            background: transparent; border: none; color: #00ff00;
-            font-family: inherit; font-size: 1.1rem; outline: none; width: 100%;
+        #server-core:active { transform: scale(0.9); }
+
+        /* ЛЕТАЮЩИЕ ФАЙРВОЛЫ */
+        .firewall {
+            position: absolute; width: 60px; height: 60px; background: rgba(255, 0, 0, 0.5);
+            border: 2px solid red; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; color: white; font-weight: bold; pointer-events: auto;
+            animation: float 4s infinite linear;
         }
-        .stats { position: absolute; top: 10px; right: 20px; color: #ffcc00; }
-        .win { color: #ffcc00; font-weight: bold; }
-        .fail { color: #ff4444; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(100px, 50px) rotate(90deg); }
+            50% { transform: translate(0, 150px) rotate(180deg); }
+            75% { transform: translate(-100px, 50px) rotate(270deg); }
+            100% { transform: translate(0, 0) rotate(360deg); }
+        }
+
+        /* МАГАЗИН АПГРЕЙДОВ */
+        .shop { position: absolute; bottom: 20px; display: flex; gap: 20px; }
+        .upgrade-btn {
+            background: #111; border: 1px solid #00ff41; color: #00ff41;
+            padding: 10px; cursor: pointer; border-radius: 5px;
+        }
+        .upgrade-btn:hover { background: #00ff41; color: #000; }
+
+        .back-btn { position: absolute; top: 20px; right: 20px; color: #555; text-decoration: none; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-<div id="terminal">
-    <div class="stats">Сыр: <span id="cheese">0</span> 🧀</div>
-    <div id="history">
-        <div>--- RatOS v1.0 (Authorized Access Only) ---</div>
-        <div>Введите 'hack', чтобы начать поиск уязвимостей...</div>
+<div id="game-container">
+    <a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">ВЫЙТИ ИЗ СЕТИ</a>
+    
+    <div class="hud">
+        КАНАЛ ВЗЛОМА: <span id="status">АКТИВЕН</span><br>
+        СЫР В КАРМАНЕ: <span id="cheese" class="cheese-count">0</span> 🧀<br>
+        МОЩНОСТЬ КЛИКА: <span id="click-power">1</span>
     </div>
-    <div class="input-line">
-        <span>rat@penthous:~$</span>
-        <input type="text" id="cmd" autofocus autocomplete="off">
+
+    <div id="server-core" onclick="mineCheese()">🧀</div>
+
+    <div class="shop">
+        <button class="upgrade-btn" onclick="buyUpgrade('click')">Улучшить вирус (Цена: <span id="click-cost">50</span> 🧀)</button>
+        <button class="upgrade-btn" onclick="buyUpgrade('auto')">Крыса-бот (Цена: <span id="auto-cost">100</span> 🧀)</button>
     </div>
 </div>
 
 <script>
     let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
-    const history = document.getElementById('history');
-    const input = document.getElementById('cmd');
+    let clickPower = 1;
+    let autoPower = 0;
+    let clickUpgradeCost = 50;
+    let autoUpgradeCost = 100;
 
     function updateUI() {
         document.getElementById('cheese').innerText = cheese;
+        document.getElementById('click-power').innerText = clickPower;
+        document.getElementById('click-cost').innerText = clickUpgradeCost;
+        document.getElementById('auto-cost').innerText = autoUpgradeCost;
         localStorage.setItem('ratCheese', cheese);
     }
 
-    function log(text, className = "") {
-        const div = document.createElement('div');
-        div.innerText = text;
-        if (className) div.className = className;
-        history.appendChild(div);
-        document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight;
+    // ДОБЫЧА
+    function mineCheese() {
+        cheese += clickPower;
+        createParticle();
+        updateUI();
     }
 
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            const val = input.value.toLowerCase().trim();
-            handleCommand(val);
-            input.value = "";
-        }
-    });
+    // ЭФФЕКТ ЧАСТИЦ (летающие циферки)
+    function createParticle() {
+        const p = document.createElement('div');
+        p.innerText = "+" + clickPower;
+        p.style.position = "absolute";
+        p.style.left = "50%"; p.style.top = "45%";
+        p.style.color = "#00ff41";
+        p.style.fontSize = "1.5rem";
+        p.style.pointerEvents = "none";
+        document.body.appendChild(p);
 
-    function handleCommand(cmd) {
-        log(`> ${cmd}`);
-        
-        if (cmd === 'hack') {
-            startHacking();
-        } else if (cmd === 'help') {
-            log("Доступные команды: hack, clear, exit");
-        } else if (cmd === 'clear') {
-            history.innerHTML = "<div>--- RatOS v1.0 ---</div>";
+        let y = 45;
+        let interval = setInterval(() => {
+            y -= 2; p.style.top = y + "%";
+            p.style.opacity = p.style.opacity ? p.style.opacity - 0.1 : 1;
+            if (y < 20) { clearInterval(interval); p.remove(); }
+        }, 50);
+    }
+
+    // АПГРЕЙДЫ
+    function buyUpgrade(type) {
+        if (type === 'click' && cheese >= clickUpgradeCost) {
+            cheese -= clickUpgradeCost;
+            clickPower++;
+            clickUpgradeCost = Math.round(clickUpgradeCost * 1.5);
+        } else if (type === 'auto' && cheese >= autoUpgradeCost) {
+            cheese -= autoUpgradeCost;
+            autoPower++;
+            autoUpgradeCost = Math.round(autoUpgradeCost * 1.8);
         } else {
-            log("Команда не найдена. Введите 'help'");
+            alert("Недостаточно сыра для апгрейда!");
         }
+        updateUI();
     }
 
-    function startHacking() {
-        log("Поиск цели...");
-        setTimeout(() => {
-            const target = ["Сырный Банк", "Кладовая Мэра", "Холодильник Кота"][Math.floor(Math.random()*3)];
-            const difficulty = Math.floor(Math.random() * 10) + 1;
-            log(`Цель найдена: ${target} (Сложность: ${difficulty})`);
-            log("Подбор пароля...");
-            
-            setTimeout(() => {
-                if (Math.random() * 10 > difficulty) {
-                    const gain = difficulty * 20;
-                    cheese += gain;
-                    log(`ВЗЛОМ УСПЕШЕН! Получено ${gain} 🧀`, "win");
-                } else {
-                    const fine = 15;
-                    cheese = Math.max(0, cheese - fine);
-                    log(`ОШИБКА! Система защиты вас обнаружила. Штраф: ${fine} 🧀`, "fail");
-                }
-                updateUI();
-            }, 1500);
-        }, 1000);
+    // АВТО-КЛИК
+    setInterval(() => {
+        if (autoPower > 0) {
+            cheese += autoPower;
+            updateUI();
+        }
+    }, 1000);
+
+    // СОЗДАНИЕ ОПАСНЫХ ФАЙРВОЛОВ
+    function spawnFirewall() {
+        const fw = document.createElement('div');
+        fw.className = 'firewall';
+        fw.innerText = "ALARM";
+        fw.style.left = Math.random() * 80 + 10 + "%";
+        fw.style.top = Math.random() * 80 + 10 + "%";
+        
+        fw.onclick = (e) => {
+            e.stopPropagation(); // Чтобы клик не засчитался как майнинг
+            cheese = Math.max(0, cheese - 20);
+            alert("СИСТЕМА ОБНАРУЖЕНА! Потеряно 20 🧀");
+            fw.remove();
+            updateUI();
+        };
+
+        document.getElementById('game-container').appendChild(fw);
+        setTimeout(() => { if(fw) fw.remove(); }, 5000);
     }
+
+    setInterval(spawnFirewall, 3000);
 
     updateUI();
 </script>
