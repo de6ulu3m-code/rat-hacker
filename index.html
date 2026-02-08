@@ -3,27 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DOORS: RAT CHASE</title>
+    <title>RAT DOORS: HARDCORE</title>
     <style>
-        body { margin: 0; background: #000; color: #fff; font-family: 'Arial', sans-serif; overflow: hidden; touch-action: none; user-select: none; }
+        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Courier New', monospace; }
         canvas { display: block; }
-        .hud { position: absolute; top: 20px; width: 100%; text-align: center; font-size: 1.5rem; color: #f00; font-weight: bold; text-shadow: 0 0 10px #f00; z-index: 10; }
-        .controls { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-around; padding: 0 20px; box-sizing: border-box; }
-        .btn { width: 80px; height: 80px; background: rgba(255,255,255,0.1); border: 3px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; }
-        #jump { border-color: #0f0; color: #0f0; }
-        #slide { border-color: #ff0; color: #ff0; }
+        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: #444; font-size: 1.2rem; pointer-events: none; }
+        .btns { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-around; }
+        .btn { width: 80px; height: 80px; border: 2px solid #333; border-radius: 10px; color: #333; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(0,0,0,0.5); }
+        .btn:active { border-color: #fff; color: #fff; background: #222; }
     </style>
 </head>
 <body>
 
-<div class="hud">ДИСТАНЦИЯ: <span id="dist">0</span>м</div>
+<div id="ui">КОМНАТА: <span id="room">1</span></div>
 <canvas id="game"></canvas>
 
-<div class="controls">
-    <div class="btn" id="left">⬅️</div>
-    <div class="btn" id="slide">⬇️</div>
-    <div class="btn" id="jump">🚀</div>
-    <div class="btn" id="right">➡️</div>
+<div class="btns">
+    <div class="btn" id="l">⬅️</div>
+    <div class="btn" id="hide">ШКАФ</div>
+    <div class="btn" id="r">➡️</div>
 </div>
 
 <script>
@@ -32,129 +30,112 @@
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    let distance = 0;
-    let speed = 6;
-    let player = { x: canvas.width / 2, y: canvas.height - 150, w: 50, h: 50, dy: 0, state: 'run' };
-    let obstacles = [];
-    let seekY = canvas.height + 200; // Позиция преследователя (внизу экрана)
-    let shake = 0;
+    let room = 1;
+    let player = { x: canvas.width/2, y: canvas.height-100, hiding: false, light: 150 };
+    let lever = { x: 0, y: 0, pulled: false };
+    let entity = { active: false, y: -100, speed: 30 };
+    let traps = [];
+    let keys = { l: false, r: false };
 
-    // Управление
-    const input = { left: false, right: false };
-    document.getElementById('left').ontouchstart = () => input.left = true;
-    document.getElementById('left').ontouchend = () => input.left = false;
-    document.getElementById('right').ontouchstart = () => input.right = true;
-    document.getElementById('right').ontouchend = () => input.right = false;
-    document.getElementById('jump').ontouchstart = () => { if(player.y >= canvas.height - 150) player.dy = -15; };
-    document.getElementById('slide').ontouchstart = () => { player.state = 'slide'; setTimeout(() => player.state = 'run', 600); };
-
-    function spawnObstacle() {
-        const types = ['jump', 'slide', 'door'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        obstacles.push({
-            x: Math.random() * (canvas.width - 100) + 50,
-            y: -100,
-            w: type === 'door' ? 80 : 120,
-            h: 40,
-            type: type
-        });
+    function initRoom() {
+        player.x = canvas.width/2;
+        player.y = canvas.height-100;
+        player.hiding = false;
+        lever = { x: 50 + Math.random()*(canvas.width-100), y: 150 + Math.random()*(canvas.height-400), pulled: false };
+        traps = [];
+        for(let i=0; i<3; i++) traps.push({x: Math.random()*canvas.width, y: 200 + Math.random()*(canvas.height-400)});
+        if(Math.random() > 0.6) setTimeout(spawnA60, 2000 + Math.random()*3000);
     }
 
-    setInterval(spawnObstacle, 1200);
+    function spawnA60() {
+        entity.active = true;
+        entity.y = -500;
+    }
+
+    document.getElementById('l').ontouchstart = () => keys.l = true;
+    document.getElementById('l').ontouchend = () => keys.l = false;
+    document.getElementById('r').ontouchstart = () => keys.r = true;
+    document.getElementById('r').ontouchend = () => keys.r = false;
+    document.getElementById('hide').ontouchstart = () => player.hiding = !player.hiding;
 
     function update() {
-        distance += 1;
-        speed += 0.001; // Ускорение со временем
-        
-        // Движение игрока
-        if (input.left) player.x -= 8;
-        if (input.right) player.x += 8;
-        player.x = Math.max(50, Math.min(canvas.width - 50, player.x));
-
-        // Физика прыжка
-        player.y += player.dy;
-        player.dy += 0.8;
-        if (player.y > canvas.height - 150) {
-            player.y = canvas.height - 150;
-            player.dy = 0;
+        if (!player.hiding) {
+            if (keys.l) player.x -= 5;
+            if (keys.r) player.x += 5;
+            player.y -= 2; // Постоянное движение вперед (как в Doors)
         }
 
-        // Движение препятствий
-        obstacles.forEach((obs, i) => {
-            obs.y += speed;
+        // Рычаг
+        if (Math.hypot(player.x - lever.x, player.y - lever.y) < 40) lever.pulled = true;
 
-            // Коллизии
-            let hit = false;
-            if (Math.abs(player.x - obs.x) < 50 && Math.abs(player.y - obs.y) < 40) {
-                if (obs.type === 'jump' && player.y > canvas.height - 180) hit = true;
-                if (obs.type === 'slide' && player.state !== 'slide') hit = true;
+        // Капканы
+        traps.forEach(t => {
+            if (Math.hypot(player.x - t.x, player.y - t.y) < 30 && !player.hiding) {
+                player.y += 5; // Замедление
             }
-
-            if (hit) {
-                shake = 20;
-                seekY -= 40; // Сик приближается при ошибке!
-            }
-
-            if (obs.y > canvas.height) obstacles.splice(i, 1);
         });
 
-        // Сик (преследователь)
-        seekY -= 0.1; 
-        if (seekY < player.y + 50) die();
+        // А-60 (Монстр)
+        if (entity.active) {
+            entity.y += entity.speed;
+            if (Math.abs(entity.y - player.y) < 50 && !player.hiding) die("A-60 СТЕР ТЕБЯ");
+            if (entity.y > canvas.height + 500) entity.active = false;
+        }
 
-        if (shake > 0) shake--;
-        document.getElementById('dist').innerText = Math.floor(distance / 10);
+        if (player.y < 50) {
+            if (lever.pulled) { room++; initRoom(); }
+            else player.y = 50;
+        }
+
+        if (player.x < 0 || player.x > canvas.width) player.x = Math.max(0, Math.min(canvas.width, player.x));
+        document.getElementById('room').innerText = room;
     }
 
-    function die() {
-        alert("СИК ПОЙМАЛ ТЕБЯ! ТВОЙ РЕКОРД: " + Math.floor(distance/10) + "м");
-        location.reload();
+    function die(msg) {
+        alert(msg);
+        room = 1;
+        initRoom();
     }
 
     function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Тряска экрана
-        if (shake > 0) {
-            ctx.translate(Math.random()*10-5, Math.random()*10-5);
+        // ТЕМНОТА
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // ФОНАРИК
+        let grd = ctx.createRadialGradient(player.x, player.y, 20, player.x, player.y, player.light);
+        grd.addColorStop(0, 'rgba(255, 255, 200, 0.3)');
+        grd.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // ОБЪЕКТЫ (видны только в свете)
+        if (Math.hypot(player.x - lever.x, player.y - lever.y) < player.light) {
+            ctx.fillStyle = lever.pulled ? '#0f0' : '#f00';
+            ctx.fillRect(lever.x-10, lever.y-10, 20, 20);
+            ctx.fillStyle = '#fff';
+            ctx.fillText("РЫЧАГ", lever.x-20, lever.y-20);
         }
 
-        // Коридор
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 10;
-        ctx.strokeRect(40, -10, canvas.width - 80, canvas.height + 20);
+        // ИГРОК
+        ctx.font = "30px Arial";
+        ctx.fillText(player.hiding ? "🚪" : "🐀", player.x-15, player.y+15);
 
-        // Препятствия
-        obstacles.forEach(obs => {
-            if (obs.type === 'jump') {
-                ctx.fillStyle = '#f00';
-                ctx.fillRect(obs.x - obs.w/2, obs.y, obs.w, obs.h);
-                ctx.fillStyle = '#fff';
-                ctx.fillText("ПЕРЕПРЫГНИ!", obs.x - 40, obs.y - 10);
-            } else if (obs.type === 'slide') {
-                ctx.fillStyle = '#ff0';
-                ctx.fillRect(obs.x - obs.w/2, obs.y - 60, obs.w, 20);
-                ctx.fillText("ПРОСКОЛЬЗНИ!", obs.x - 50, obs.y - 80);
-            }
-        });
+        // МОНСТР A-60
+        if (entity.active) {
+            ctx.fillStyle = '#f00';
+            ctx.shadowBlur = 30; ctx.shadowColor = 'red';
+            ctx.fillText("👹", player.x + (Math.random()*20-10), entity.y);
+            ctx.shadowBlur = 0;
+        }
 
-        // Игрок
-        ctx.font = "40px Arial";
-        let icon = player.state === 'slide' ? "🥨" : "🐀";
-        ctx.fillText(icon, player.x - 20, player.y + 20);
-
-        // Сик (Seek)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-        ctx.fillRect(0, seekY, canvas.width, 500);
-        ctx.fillStyle = '#f00';
-        ctx.font = "100px Arial";
-        ctx.fillText("👁️", canvas.width/2 - 50, seekY + 100);
-
-        ctx.setTransform(1, 0, 0, 1, 0, 0); // Сброс тряски
+        // ДВЕРЬ
+        ctx.strokeStyle = lever.pulled ? '#0f0' : '#333';
+        ctx.strokeRect(canvas.width/2-50, 0, 100, 50);
     }
 
-    function loop() { update(); draw(); requestAnimationFrame(loop); }
-    loop();
+    initRoom();
+    setInterval(() => { update(); draw(); }, 1000/60);
 </script>
 </body>
 </html>
