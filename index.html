@@ -3,161 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RatOS: SYPHON-HACKER</title>
+    <title>RatOS: Ultra-Breach</title>
     <style>
         body {
-            background: #050505; color: #00ff41; font-family: 'Courier New', monospace;
-            display: flex; flex-direction: column; align-items: center; margin: 0; overflow: hidden;
+            background: #000; color: #00ff41; font-family: 'Courier New', monospace;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; overflow: hidden;
         }
-        #game-container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #matrix-bg { position: fixed; top: 0; left: 0; z-index: -1; opacity: 0.1; font-size: 10px; }
         
-        /* СТАТИСТИКА */
-        .hud { position: absolute; top: 20px; left: 20px; font-size: 1.2rem; text-shadow: 0 0 10px #00ff41; }
-        .cheese-count { color: #ffcc00; font-size: 2rem; }
+        .header { position: absolute; top: 20px; width: 90%; display: flex; justify-content: space-between; font-size: 1.2rem; border-bottom: 1px solid #00ff41; padding-bottom: 5px; }
+        .cheese-stat { color: #ffcc00; }
 
-        /* ЦЕНТРАЛЬНЫЙ ОБЪЕКТ */
-        #server-core {
-            width: 200px; height: 200px; background: #ffcc00; border-radius: 20%;
-            display: flex; align-items: center; justify-content: center; font-size: 80px;
-            cursor: pointer; box-shadow: 0 0 50px #ffcc00; transition: transform 0.1s;
-            position: relative; z-index: 10;
+        /* ИГРОВОЕ ПОЛЕ */
+        #game-board {
+            display: grid; grid-template-columns: repeat(4, 70px); grid-template-rows: repeat(4, 70px);
+            gap: 15px; background: rgba(0, 50, 0, 0.3); padding: 20px; border: 2px solid #00ff41;
+            box-shadow: 0 0 20px #00ff41; border-radius: 10px;
         }
-        #server-core:active { transform: scale(0.9); }
-
-        /* ЛЕТАЮЩИЕ ФАЙРВОЛЫ */
-        .firewall {
-            position: absolute; width: 60px; height: 60px; background: rgba(255, 0, 0, 0.5);
-            border: 2px solid red; border-radius: 50%; display: flex; align-items: center;
-            justify-content: center; color: white; font-weight: bold; pointer-events: auto;
-            animation: float 4s infinite linear;
+        .node {
+            width: 70px; height: 70px; border: 1px solid #00ff41; display: flex;
+            align-items: center; justify-content: center; font-size: 1.5rem;
+            cursor: pointer; transition: 0.2s; user-select: none;
         }
+        .node:hover { background: rgba(0, 255, 65, 0.2); box-shadow: 0 0 10px #00ff41; }
+        .node.target { color: #000; background: #00ff41; font-weight: bold; }
+        .node.error { background: #ff4444; border-color: red; }
 
-        @keyframes float {
-            0% { transform: translate(0, 0) rotate(0deg); }
-            25% { transform: translate(100px, 50px) rotate(90deg); }
-            50% { transform: translate(0, 150px) rotate(180deg); }
-            75% { transform: translate(-100px, 50px) rotate(270deg); }
-            100% { transform: translate(0, 0) rotate(360deg); }
-        }
+        /* ТАЙМЕР */
+        #timer-bar { width: 320px; height: 10px; background: #111; border: 1px solid #00ff41; margin-top: 20px; position: relative; }
+        #timer-fill { width: 100%; height: 100%; background: #00ff41; transition: width 0.1s linear; }
 
-        /* МАГАЗИН АПГРЕЙДОВ */
-        .shop { position: absolute; bottom: 20px; display: flex; gap: 20px; }
-        .upgrade-btn {
-            background: #111; border: 1px solid #00ff41; color: #00ff41;
-            padding: 10px; cursor: pointer; border-radius: 5px;
-        }
-        .upgrade-btn:hover { background: #00ff41; color: #000; }
-
-        .back-btn { position: absolute; top: 20px; right: 20px; color: #555; text-decoration: none; border: 1px solid #555; padding: 5px 10px; border-radius: 5px; }
+        .log { margin-top: 20px; height: 60px; text-align: center; font-size: 0.9rem; color: #888; }
+        .back-btn { position: absolute; bottom: 20px; color: #00ff41; text-decoration: none; border: 1px solid #00ff41; padding: 5px 20px; }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">ВЫЙТИ ИЗ СЕТИ</a>
-    
-    <div class="hud">
-        КАНАЛ ВЗЛОМА: <span id="status">АКТИВЕН</span><br>
-        СЫР В КАРМАНЕ: <span id="cheese" class="cheese-count">0</span> 🧀<br>
-        МОЩНОСТЬ КЛИКА: <span id="click-power">1</span>
-    </div>
+<div id="matrix-bg"></div>
 
-    <div id="server-core" onclick="mineCheese()">🧀</div>
-
-    <div class="shop">
-        <button class="upgrade-btn" onclick="buyUpgrade('click')">Улучшить вирус (Цена: <span id="click-cost">50</span> 🧀)</button>
-        <button class="upgrade-btn" onclick="buyUpgrade('auto')">Крыса-бот (Цена: <span id="auto-cost">100</span> 🧀)</button>
-    </div>
+<div class="header">
+    <div>SYSTEM: BREACH_V2.0</div>
+    <div class="cheese-stat">DATA_VAL: <span id="cheese-val">0</span> 🧀</div>
 </div>
+
+<div id="target-code" style="font-size: 1.5rem; margin-bottom: 15px; letter-spacing: 5px;">ЦЕЛЬ: <span id="key">--</span></div>
+
+<div id="game-board"></div>
+
+<div id="timer-bar"><div id="timer-fill"></div></div>
+
+<div class="log" id="console-log">Инициализация взлома...</div>
+
+<a href="https://de6ulu3m-code.github.io/ratpage/" class="back-btn">DISCONNECT</a>
 
 <script>
     let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
-    let clickPower = 1;
-    let autoPower = 0;
-    let clickUpgradeCost = 50;
-    let autoUpgradeCost = 100;
+    let currentKey = "";
+    let timeLeft = 100;
+    let level = 1;
+    let symbols = ["0", "1", "X", "Y", "A", "B", "!", "?", "#", "Ω"];
 
-    function updateUI() {
-        document.getElementById('cheese').innerText = cheese;
-        document.getElementById('click-power').innerText = clickPower;
-        document.getElementById('click-cost').innerText = clickUpgradeCost;
-        document.getElementById('auto-cost').innerText = autoUpgradeCost;
+    function updateStats() {
+        document.getElementById('cheese-val').innerText = cheese;
         localStorage.setItem('ratCheese', cheese);
     }
 
-    // ДОБЫЧА
-    function mineCheese() {
-        cheese += clickPower;
-        createParticle();
-        updateUI();
-    }
-
-    // ЭФФЕКТ ЧАСТИЦ (летающие циферки)
-    function createParticle() {
-        const p = document.createElement('div');
-        p.innerText = "+" + clickPower;
-        p.style.position = "absolute";
-        p.style.left = "50%"; p.style.top = "45%";
-        p.style.color = "#00ff41";
-        p.style.fontSize = "1.5rem";
-        p.style.pointerEvents = "none";
-        document.body.appendChild(p);
-
-        let y = 45;
-        let interval = setInterval(() => {
-            y -= 2; p.style.top = y + "%";
-            p.style.opacity = p.style.opacity ? p.style.opacity - 0.1 : 1;
-            if (y < 20) { clearInterval(interval); p.remove(); }
-        }, 50);
-    }
-
-    // АПГРЕЙДЫ
-    function buyUpgrade(type) {
-        if (type === 'click' && cheese >= clickUpgradeCost) {
-            cheese -= clickUpgradeCost;
-            clickPower++;
-            clickUpgradeCost = Math.round(clickUpgradeCost * 1.5);
-        } else if (type === 'auto' && cheese >= autoUpgradeCost) {
-            cheese -= autoUpgradeCost;
-            autoPower++;
-            autoUpgradeCost = Math.round(autoUpgradeCost * 1.8);
-        } else {
-            alert("Недостаточно сыра для апгрейда!");
-        }
-        updateUI();
-    }
-
-    // АВТО-КЛИК
-    setInterval(() => {
-        if (autoPower > 0) {
-            cheese += autoPower;
-            updateUI();
-        }
-    }, 1000);
-
-    // СОЗДАНИЕ ОПАСНЫХ ФАЙРВОЛОВ
-    function spawnFirewall() {
-        const fw = document.createElement('div');
-        fw.className = 'firewall';
-        fw.innerText = "ALARM";
-        fw.style.left = Math.random() * 80 + 10 + "%";
-        fw.style.top = Math.random() * 80 + 10 + "%";
+    function createBoard() {
+        const board = document.getElementById('game-board');
+        board.innerHTML = "";
+        let allSymbols = [];
         
-        fw.onclick = (e) => {
-            e.stopPropagation(); // Чтобы клик не засчитался как майнинг
-            cheese = Math.max(0, cheese - 20);
-            alert("СИСТЕМА ОБНАРУЖЕНА! Потеряно 20 🧀");
-            fw.remove();
-            updateUI();
-        };
-
-        document.getElementById('game-container').appendChild(fw);
-        setTimeout(() => { if(fw) fw.remove(); }, 5000);
+        // Заполняем случайными символами
+        for (let i = 0; i < 16; i++) {
+            let s = symbols[Math.floor(Math.random() * symbols.length)];
+            allSymbols.push(s);
+            const node = document.createElement('div');
+            node.className = 'node';
+            node.innerText = s;
+            node.onclick = () => checkNode(s, node);
+            board.appendChild(node);
+        }
+        
+        // Выбираем один из символов как цель
+        currentKey = allSymbols[Math.floor(Math.random() * allSymbols.length)];
+        document.getElementById('key').innerText = currentKey;
     }
 
-    setInterval(spawnFirewall, 3000);
+    function checkNode(symbol, element) {
+        if (symbol === currentKey) {
+            cheese += Math.floor(level * 1.5);
+            level++;
+            timeLeft = Math.min(100, timeLeft + 20); // Добавляем время за успех
+            document.getElementById('console-log').innerText = "ДОСТУП РАЗРЕШЕН. ПЕРЕХОД К СЛЕДУЮЩЕМУ УЗЛУ...";
+            element.classList.add('target');
+            setTimeout(createBoard, 200);
+        } else {
+            timeLeft -= 15; // Штраф за ошибку
+            document.getElementById('console-log').innerText = "ОШИБКА! СИСТЕМА ОБНАРУЖИЛА ВТОРЖЕНИЕ!";
+            element.classList.add('error');
+            setTimeout(() => element.classList.remove('error'), 300);
+        }
+        updateStats();
+    }
 
-    updateUI();
+    // Таймер игры
+    setInterval(() => {
+        timeLeft -= (0.5 + (level * 0.05)); // Чем выше уровень, тем быстрее капает время
+        document.getElementById('timer-fill').style.width = timeLeft + "%";
+        
+        if (timeLeft <= 0) {
+            alert("СОЕДИНЕНИЕ РАЗОРВАНО. Вы успели добыть " + (level * 2) + " сырков.");
+            location.reload();
+        }
+    }, 100);
+
+    // Матричный фон для атмосферы
+    function drawMatrix() {
+        let bg = document.getElementById('matrix-bg');
+        let txt = "";
+        for(let i=0; i<1000; i++) txt += symbols[Math.floor(Math.random()*symbols.length)];
+        bg.innerText = txt;
+    }
+    setInterval(drawMatrix, 100);
+
+    createBoard();
+    updateStats();
 </script>
 </body>
 </html>
