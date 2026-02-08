@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>RatOS v1.0 - Terminal</title>
+    <style>
+        body {
+            background-color: #0c0c0c;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; height: 100vh; margin: 0;
+            overflow: hidden;
+        }
+        #terminal {
+            width: 80%; max-width: 600px; height: 400px;
+            border: 2px solid #00ff00; padding: 20px;
+            background: #000; box-shadow: 0 0 20px rgba(0,255,0,0.2);
+            overflow-y: auto; position: relative;
+        }
+        .input-line { display: flex; gap: 10px; margin-top: 10px; }
+        input {
+            background: transparent; border: none; color: #00ff00;
+            font-family: inherit; font-size: 1.1rem; outline: none; width: 100%;
+        }
+        .stats { position: absolute; top: 10px; right: 20px; color: #ffcc00; }
+        .win { color: #ffcc00; font-weight: bold; }
+        .fail { color: #ff4444; }
+    </style>
+</head>
+<body>
+
+<div id="terminal">
+    <div class="stats">Сыр: <span id="cheese">0</span> 🧀</div>
+    <div id="history">
+        <div>--- RatOS v1.0 (Authorized Access Only) ---</div>
+        <div>Введите 'hack', чтобы начать поиск уязвимостей...</div>
+    </div>
+    <div class="input-line">
+        <span>rat@penthous:~$</span>
+        <input type="text" id="cmd" autofocus autocomplete="off">
+    </div>
+</div>
+
+<script>
+    let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
+    const history = document.getElementById('history');
+    const input = document.getElementById('cmd');
+
+    function updateUI() {
+        document.getElementById('cheese').innerText = cheese;
+        localStorage.setItem('ratCheese', cheese);
+    }
+
+    function log(text, className = "") {
+        const div = document.createElement('div');
+        div.innerText = text;
+        if (className) div.className = className;
+        history.appendChild(div);
+        document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight;
+    }
+
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const val = input.value.toLowerCase().trim();
+            handleCommand(val);
+            input.value = "";
+        }
+    });
+
+    function handleCommand(cmd) {
+        log(`> ${cmd}`);
+        
+        if (cmd === 'hack') {
+            startHacking();
+        } else if (cmd === 'help') {
+            log("Доступные команды: hack, clear, exit");
+        } else if (cmd === 'clear') {
+            history.innerHTML = "<div>--- RatOS v1.0 ---</div>";
+        } else {
+            log("Команда не найдена. Введите 'help'");
+        }
+    }
+
+    function startHacking() {
+        log("Поиск цели...");
+        setTimeout(() => {
+            const target = ["Сырный Банк", "Кладовая Мэра", "Холодильник Кота"][Math.floor(Math.random()*3)];
+            const difficulty = Math.floor(Math.random() * 10) + 1;
+            log(`Цель найдена: ${target} (Сложность: ${difficulty})`);
+            log("Подбор пароля...");
+            
+            setTimeout(() => {
+                if (Math.random() * 10 > difficulty) {
+                    const gain = difficulty * 20;
+                    cheese += gain;
+                    log(`ВЗЛОМ УСПЕШЕН! Получено ${gain} 🧀`, "win");
+                } else {
+                    const fine = 15;
+                    cheese = Math.max(0, cheese - fine);
+                    log(`ОШИБКА! Система защиты вас обнаружила. Штраф: ${fine} 🧀`, "fail");
+                }
+                updateUI();
+            }, 1500);
+        }, 1000);
+    }
+
+    updateUI();
+</script>
+</body>
+</html>
