@@ -3,139 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RAT DOORS: HARDCORE</title>
+    <title>RatOS: Logic Escape</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: 'Courier New', monospace; }
-        canvas { display: block; }
-        #ui { position: absolute; top: 10px; width: 100%; text-align: center; color: #444; font-size: 1.2rem; pointer-events: none; }
-        .btns { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: space-around; }
-        .btn { width: 80px; height: 80px; border: 2px solid #333; border-radius: 10px; color: #333; display: flex; align-items: center; justify-content: center; font-weight: bold; background: rgba(0,0,0,0.5); }
-        .btn:active { border-color: #fff; color: #fff; background: #222; }
+        body { margin: 0; background: #1a1a1a; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; text-align: center; }
+        #screen { width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .door-panel { width: 300px; height: 400px; background: #333; border: 5px solid #555; border-radius: 10px; position: relative; padding: 20px; box-sizing: border-box; }
+        .timer { font-size: 2rem; color: #f00; margin-bottom: 20px; font-weight: bold; }
+        .hint { margin-top: 20px; color: #ffcc00; font-size: 1.2rem; }
+        input { background: #000; border: 2px solid #0f0; color: #0f0; font-size: 2rem; width: 80%; text-align: center; outline: none; margin-top: 50px; }
+        .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 20px; }
+        .num-btn { background: #444; border: 2px solid #666; color: #fff; padding: 15px; font-size: 1.2rem; cursor: pointer; border-radius: 5px; }
+        .num-btn:active { background: #0f0; color: #000; }
+        #status-msg { margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div id="ui">КОМНАТА: <span id="room">1</span></div>
-<canvas id="game"></canvas>
-
-<div class="btns">
-    <div class="btn" id="l">⬅️</div>
-    <div class="btn" id="hide">ШКАФ</div>
-    <div class="btn" id="r">➡️</div>
+<div id="screen">
+    <div class="timer">ГАЗ ЧЕРЕЗ: <span id="time">30</span>с</div>
+    <div id="room-label">ДВЕРЬ №1</div>
+    
+    <div class="door-panel">
+        <div id="puzzle-text" style="font-size: 1.2rem; margin-top: 20px;">ЗАДАЧА: 5 + 7 = ?</div>
+        <input type="text" id="answer" readonly placeholder="????">
+        
+        <div class="numpad">
+            <div class="num-btn" onclick="addNum(1)">1</div>
+            <div class="num-btn" onclick="addNum(2)">2</div>
+            <div class="num-btn" onclick="addNum(3)">3</div>
+            <div class="num-btn" onclick="addNum(4)">4</div>
+            <div class="num-btn" onclick="addNum(5)">5</div>
+            <div class="num-btn" onclick="addNum(6)">6</div>
+            <div class="num-btn" onclick="addNum(7)">7</div>
+            <div class="num-btn" onclick="addNum(8)">8</div>
+            <div class="num-btn" onclick="addNum(9)">9</div>
+            <div class="num-btn" style="background:#800" onclick="clearAns()">C</div>
+            <div class="num-btn" onclick="addNum(0)">0</div>
+            <div class="num-btn" style="background:#080" onclick="checkAns()">OK</div>
+        </div>
+        <div id="status-msg"></div>
+    </div>
+    
+    <div class="hint" id="hint-text">Введи ответ, чтобы открыть дверь!</div>
 </div>
 
 <script>
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    let currentDoor = 1;
+    let timeLeft = 30;
+    let correctAnswer = "";
+    let timerInterval;
 
-    let room = 1;
-    let player = { x: canvas.width/2, y: canvas.height-100, hiding: false, light: 150 };
-    let lever = { x: 0, y: 0, pulled: false };
-    let entity = { active: false, y: -100, speed: 30 };
-    let traps = [];
-    let keys = { l: false, r: false };
-
-    function initRoom() {
-        player.x = canvas.width/2;
-        player.y = canvas.height-100;
-        player.hiding = false;
-        lever = { x: 50 + Math.random()*(canvas.width-100), y: 150 + Math.random()*(canvas.height-400), pulled: false };
-        traps = [];
-        for(let i=0; i<3; i++) traps.push({x: Math.random()*canvas.width, y: 200 + Math.random()*(canvas.height-400)});
-        if(Math.random() > 0.6) setTimeout(spawnA60, 2000 + Math.random()*3000);
-    }
-
-    function spawnA60() {
-        entity.active = true;
-        entity.y = -500;
-    }
-
-    document.getElementById('l').ontouchstart = () => keys.l = true;
-    document.getElementById('l').ontouchend = () => keys.l = false;
-    document.getElementById('r').ontouchstart = () => keys.r = true;
-    document.getElementById('r').ontouchend = () => keys.r = false;
-    document.getElementById('hide').ontouchstart = () => player.hiding = !player.hiding;
-
-    function update() {
-        if (!player.hiding) {
-            if (keys.l) player.x -= 5;
-            if (keys.r) player.x += 5;
-            player.y -= 2; // Постоянное движение вперед (как в Doors)
-        }
-
-        // Рычаг
-        if (Math.hypot(player.x - lever.x, player.y - lever.y) < 40) lever.pulled = true;
-
-        // Капканы
-        traps.forEach(t => {
-            if (Math.hypot(player.x - t.x, player.y - t.y) < 30 && !player.hiding) {
-                player.y += 5; // Замедление
+    function startLevel() {
+        clearInterval(timerInterval);
+        timeLeft = Math.max(10, 35 - currentDoor); // С каждой дверью времени всё меньше!
+        document.getElementById('time').innerText = timeLeft;
+        document.getElementById('room-label').innerText = "ДВЕРЬ №" + currentDoor;
+        document.getElementById('status-msg').innerText = "";
+        document.getElementById('answer').value = "";
+        
+        generatePuzzle();
+        
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            document.getElementById('time').innerText = timeLeft;
+            if (timeLeft <= 0) {
+                gameOver();
             }
-        });
-
-        // А-60 (Монстр)
-        if (entity.active) {
-            entity.y += entity.speed;
-            if (Math.abs(entity.y - player.y) < 50 && !player.hiding) die("A-60 СТЕР ТЕБЯ");
-            if (entity.y > canvas.height + 500) entity.active = false;
-        }
-
-        if (player.y < 50) {
-            if (lever.pulled) { room++; initRoom(); }
-            else player.y = 50;
-        }
-
-        if (player.x < 0 || player.x > canvas.width) player.x = Math.max(0, Math.min(canvas.width, player.x));
-        document.getElementById('room').innerText = room;
+        }, 1000);
     }
 
-    function die(msg) {
-        alert(msg);
-        room = 1;
-        initRoom();
+    function generatePuzzle() {
+        const type = Math.floor(Math.random() * 3);
+        const pText = document.getElementById('puzzle-text');
+        
+        if (type === 0) { // Математика
+            let a = Math.floor(Math.random() * 20 * (currentDoor/2));
+            let b = Math.floor(Math.random() * 20 * (currentDoor/2));
+            correctAnswer = (a + b).toString();
+            pText.innerText = `РЕШИ: ${a} + ${b} = ?`;
+        } else if (type === 1) { // Последовательность
+            let start = Math.floor(Math.random() * 10);
+            let step = Math.floor(Math.random() * 5) + 1;
+            let seq = [start, start + step, start + step * 2];
+            correctAnswer = (start + step * 3).toString();
+            pText.innerText = `ПРОДОЛЖИ: ${seq.join(', ')}, ...?`;
+        } else { // Память (быстрое мигание числа)
+            let code = Math.floor(1000 + Math.random() * 9000).toString();
+            correctAnswer = code;
+            pText.innerText = "ЗАПОМНИ КОД!";
+            setTimeout(() => { pText.innerText = code; }, 500);
+            setTimeout(() => { pText.innerText = "ВВОДИ КОД!"; }, 1500);
+        }
     }
 
-    function draw() {
-        // ТЕМНОТА
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // ФОНАРИК
-        let grd = ctx.createRadialGradient(player.x, player.y, 20, player.x, player.y, player.light);
-        grd.addColorStop(0, 'rgba(255, 255, 200, 0.3)');
-        grd.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = grd;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // ОБЪЕКТЫ (видны только в свете)
-        if (Math.hypot(player.x - lever.x, player.y - lever.y) < player.light) {
-            ctx.fillStyle = lever.pulled ? '#0f0' : '#f00';
-            ctx.fillRect(lever.x-10, lever.y-10, 20, 20);
-            ctx.fillStyle = '#fff';
-            ctx.fillText("РЫЧАГ", lever.x-20, lever.y-20);
-        }
-
-        // ИГРОК
-        ctx.font = "30px Arial";
-        ctx.fillText(player.hiding ? "🚪" : "🐀", player.x-15, player.y+15);
-
-        // МОНСТР A-60
-        if (entity.active) {
-            ctx.fillStyle = '#f00';
-            ctx.shadowBlur = 30; ctx.shadowColor = 'red';
-            ctx.fillText("👹", player.x + (Math.random()*20-10), entity.y);
-            ctx.shadowBlur = 0;
-        }
-
-        // ДВЕРЬ
-        ctx.strokeStyle = lever.pulled ? '#0f0' : '#333';
-        ctx.strokeRect(canvas.width/2-50, 0, 100, 50);
+    function addNum(n) {
+        document.getElementById('answer').value += n;
     }
 
-    initRoom();
-    setInterval(() => { update(); draw(); }, 1000/60);
+    function clearAns() {
+        document.getElementById('answer').value = "";
+    }
+
+    function checkAns() {
+        const val = document.getElementById('answer').value;
+        if (val === correctAnswer) {
+            currentDoor++;
+            document.getElementById('status-msg').innerText = "ДВЕРЬ ОТКРЫТА!";
+            document.getElementById('status-msg').style.color = "#0f0";
+            setTimeout(startLevel, 1000);
+        } else {
+            document.getElementById('status-msg').innerText = "ОШИБКА!";
+            document.getElementById('status-msg').style.color = "#f00";
+            clearAns();
+        }
+    }
+
+    function gameOver() {
+        clearInterval(timerInterval);
+        alert("ТЫ НЕ УСПЕЛ! Газ заполнил комнату. Твой результат: " + (currentDoor - 1) + " дверей.");
+        currentDoor = 1;
+        startLevel();
+    }
+
+    startLevel();
 </script>
 </body>
 </html>
