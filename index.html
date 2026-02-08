@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RatOS: Dungeon Crawler</title>
+    <title>RatOS: Dungeon Pro</title>
     <style>
-        body { margin: 0; background: #000; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; }
+        body { margin: 0; background: #050505; color: #0f0; font-family: 'Courier New', monospace; overflow: hidden; touch-action: none; user-select: none; }
         canvas { display: block; }
-        .ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; font-size: 1.1rem; text-shadow: 2px 2px #000; }
-        .mission { position: absolute; top: 50px; width: 100%; text-align: center; color: #ffcc00; font-weight: bold; }
-        #joystick { position: absolute; bottom: 40px; left: 40px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid #0f0; }
-        #knob { position: absolute; top: 30px; left: 30px; width: 40px; height: 40px; background: #0f0; border-radius: 50%; }
-        #fire-btn { position: absolute; bottom: 40px; right: 40px; width: 100px; height: 100px; background: rgba(255,0,0,0.3); border: 3px solid #f00; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; }
+        .ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; pointer-events: none; z-index: 10; font-size: 1.2rem; text-shadow: 2px 2px #000; }
+        #joystick { position: absolute; bottom: 40px; left: 40px; width: 110px; height: 110px; background: rgba(0,255,0,0.1); border-radius: 50%; border: 2px solid #0f0; }
+        #knob { position: absolute; top: 35px; left: 35px; width: 40px; height: 40px; background: #0f0; border-radius: 50%; box-shadow: 0 0 15px #0f0; }
+        #fire-btn { position: absolute; bottom: 40px; right: 40px; width: 110px; height: 110px; background: rgba(255,0,0,0.2); border: 3px solid #f00; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 1.2rem; box-shadow: 0 0 15px #f00; }
+        .floor-msg { position: absolute; top: 60px; width: 100%; text-align: center; color: #ffcc00; font-size: 1.5rem; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -21,10 +21,9 @@
 <div class="ui">
     <div>❤️ HP: <span id="hp">100</span></div>
     <div>📦 ЭТАЖ: <span id="floor">1</span></div>
-    <div>🎯 ВРАГОВ: <span id="enemies-left">0</span></div>
+    <div>🎯 ЦЕЛИ: <span id="enemies-left">0</span></div>
 </div>
-
-<div class="mission" id="msg">ЗАЧИСТИ КОМНАТУ, ЧТОБЫ ПРОЙТИ ДАЛЬШЕ</div>
+<div class="floor-msg" id="msg">ЗАЧИСТИ ВСЕХ!</div>
 
 <div id="joystick"><div id="knob"></div></div>
 <div id="fire-btn">ОГОНЬ</div>
@@ -34,141 +33,133 @@
     const ctx = canvas.getContext('2d');
     
     let floor = 1;
-    let cheese = parseInt(localStorage.getItem('ratCheese')) || 0;
-    let player = { x: 100, y: 100, hp: 100, speed: 5, r: 20 };
+    let player = { x: 0, y: 0, hp: 100, speed: 5, lastDir: {x: 1, y: 0} };
     let enemies = [];
     let bullets = [];
-    let gameActive = true;
-    let exitOpen = false;
-
-    // Управление
     let joy = { x: 0, y: 0, active: false };
-    const knob = document.getElementById('knob');
+    let shooting = false;
+    let lastFireDate = 0;
 
     function initFloor() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        player.x = 50; player.y = canvas.height / 2;
+        player.x = 80; player.y = canvas.height / 2;
         enemies = [];
         bullets = [];
-        exitOpen = false;
-        
-        // Спавним монстров в зависимости от этажа
-        let count = 3 + floor;
+        let count = 4 + floor;
         for(let i=0; i<count; i++) {
             enemies.push({
-                x: 200 + Math.random() * (canvas.width - 300),
-                y: Math.random() * canvas.height,
+                x: 300 + Math.random() * (canvas.width - 400),
+                y: 50 + Math.random() * (canvas.height - 100),
                 hp: 2 + Math.floor(floor/2),
-                type: Math.random() > 0.7 ? '😼' : '🐦',
-                v: 1 + Math.random()
+                type: Math.random() > 0.6 ? '😼' : '🐦',
+                v: 1.2 + (floor * 0.1)
             });
         }
-        updateUI();
     }
 
-    // Обработка джойстика
-    const moveJoy = (e) => {
+    // Управление движением
+    const knob = document.getElementById('knob');
+    const handleJoy = (e) => {
         if (!joy.active) return;
         const rect = document.getElementById('joystick').getBoundingClientRect();
-        const cx = rect.left + 50, cy = rect.top + 50;
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const dx = clientX - cx, dy = clientY - cy;
+        const cx = rect.left + 55, cy = rect.top + 55;
+        const touch = e.touches ? e.touches[0] : e;
+        const dx = touch.clientX - cx, dy = touch.clientY - cy;
         const d = Math.sqrt(dx*dx + dy*dy);
         joy.x = dx / d; joy.y = dy / d;
-        knob.style.transform = `translate(${joy.x * Math.min(d, 40)}px, ${joy.y * Math.min(d, 40)}px)`;
+        knob.style.transform = `translate(${joy.x * Math.min(d, 45)}px, ${joy.y * Math.min(d, 45)}px)`;
+        // Запоминаем последнее направление для стрельбы
+        if (d > 5) { player.lastDir = {x: joy.x, y: joy.y}; }
     };
 
-    document.getElementById('joystick').addEventListener('touchstart', () => joy.active = true);
-    window.addEventListener('touchmove', moveJoy);
+    document.getElementById('joystick').addEventListener('touchstart', (e) => { joy.active = true; handleJoy(e); });
+    window.addEventListener('touchmove', handleJoy);
     window.addEventListener('touchend', () => { joy.active = false; joy.x = 0; joy.y = 0; knob.style.transform = 'translate(0,0)'; });
 
-    // Стрельба
-    document.getElementById('fire-btn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        // Стреляем в сторону движения или направо
-        let vx = joy.x !== 0 ? joy.x * 12 : 12;
-        let vy = joy.y !== 0 ? joy.y * 12 : 0;
-        bullets.push({ x: player.x, y: player.y, vx, vy });
-    });
+    // Управление стрельбой
+    const fireBtn = document.getElementById('fire-btn');
+    fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); shooting = true; });
+    window.addEventListener('touchend', () => { shooting = false; });
 
     function update() {
-        if (!gameActive) return;
-
+        // Движение
         player.x += joy.x * player.speed;
         player.y += joy.y * player.speed;
+        player.x = Math.max(30, Math.min(canvas.width - 30, player.x));
+        player.y = Math.max(30, Math.min(canvas.height - 30, player.y));
 
-        // Границы экрана
-        player.x = Math.max(20, Math.min(canvas.width - 20, player.x));
-        player.y = Math.max(20, Math.min(canvas.height - 20, player.y));
+        // Логика стрельбы (во все стороны)
+        if (shooting && Date.now() - lastFireDate > 250) {
+            bullets.push({ 
+                x: player.x, 
+                y: player.y, 
+                vx: player.lastDir.x * 12, 
+                vy: player.lastDir.y * 12 
+            });
+            lastFireDate = Date.now();
+        }
 
+        // Пули
         bullets.forEach((b, bi) => {
             b.x += b.vx; b.y += b.vy;
             enemies.forEach((en, ei) => {
                 if (Math.hypot(b.x - en.x, b.y - en.y) < 30) {
-                    en.hp--;
-                    bullets.splice(bi, 1);
+                    en.hp--; bullets.splice(bi, 1);
                     if (en.hp <= 0) enemies.splice(ei, 1);
                 }
             });
+            if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(bi, 1);
         });
 
+        // Враги
         enemies.forEach(en => {
-            let dx = player.x - en.x, dy = player.y - en.y;
-            let d = Math.hypot(dx, dy);
-            en.x += (dx / d) * en.v;
-            en.y += (dy / d) * en.v;
-            if (d < 30) player.hp -= 0.5;
+            let angle = Math.atan2(player.y - en.y, player.x - en.x);
+            en.x += Math.cos(angle) * en.v;
+            en.y += Math.sin(angle) * en.v;
+            if (Math.hypot(player.x - en.x, player.y - en.y) < 35) player.hp -= 0.4;
         });
 
         if (enemies.length === 0) {
-            exitOpen = true;
-            document.getElementById('msg').innerText = "КОМНАТА ЧИСТА! ИДИ К ПРАВОМУ КРАЮ →";
-            if (player.x > canvas.width - 40) {
-                floor++;
-                initFloor();
-                document.getElementById('msg').innerText = "ЭТАЖ " + floor + ": ЗАЧИСТКА...";
-            }
+            document.getElementById('msg').innerText = "ОТЛИЧНО! ПЕРЕХОД НА СЛЕДУЮЩИЙ ЭТАЖ...";
+            if (player.x > canvas.width - 50) { floor++; initFloor(); }
+        } else {
+            document.getElementById('msg').innerText = `ЗАЧИСТКА ЭТАЖА ${floor}`;
         }
 
-        if (player.hp <= 0) {
-            alert("ТЫ ПАЛ НА ЭТАЖЕ " + floor);
-            location.reload();
-        }
-        updateUI();
-    }
+        if (player.hp <= 0) location.reload();
 
-    function updateUI() {
         document.getElementById('hp').innerText = Math.ceil(player.hp);
         document.getElementById('floor').innerText = floor;
         document.getElementById('enemies-left').innerText = enemies.length;
     }
 
     function draw() {
-        ctx.fillStyle = '#0a0a0a';
+        ctx.fillStyle = '#050505';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Дверь
-        if (exitOpen) {
+        // Выход
+        if (enemies.length === 0) {
             ctx.fillStyle = '#0f0';
-            ctx.fillRect(canvas.width - 20, canvas.height/2 - 50, 20, 100);
+            ctx.fillRect(canvas.width - 15, canvas.height/2 - 60, 15, 120);
         }
 
         // Игрок
-        ctx.font = "40px Arial";
-        ctx.fillText("🐀", player.x - 20, player.y + 15);
+        ctx.font = "45px Arial";
+        ctx.fillText("🐀", player.x - 22, player.y + 18);
 
         // Враги
         enemies.forEach(en => {
-            ctx.fillText(en.type, en.x - 15, en.y + 15);
+            ctx.fillText(en.type, en.x - 18, en.y + 15);
             ctx.fillStyle = '#f00';
-            ctx.fillRect(en.x - 20, en.y - 30, (en.hp/(2+floor/2))*40, 5);
+            ctx.fillRect(en.x - 20, en.y - 35, 40 * (en.hp / (2 + floor/2)), 6);
         });
 
-        // Пули
-        ctx.fillStyle = '#ff0';
-        bullets.forEach(b => ctx.beginPath() + ctx.arc(b.x, b.y, 5, 0, 7) + ctx.fill());
+        // Пули (светящиеся)
+        ctx.fillStyle = '#fff700';
+        bullets.forEach(b => {
+            ctx.beginPath(); ctx.arc(b.x, b.y, 6, 0, Math.PI*2); ctx.fill();
+        });
     }
 
     initFloor();
